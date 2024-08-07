@@ -10,11 +10,20 @@ class YHandler:
     This is used for testing purposes as we can avoid calling out to the Yahoo!
     service.
     """
+
     def __init__(self):
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
 
     def get_teams_raw(self):
         """Return the raw JSON when requesting the logged in players teams.
+
+        :return: JSON document of the request.
+        """
+        with open(self.dir_path + "/sample.users_teams.json", "r") as f:
+            return json.load(f)
+
+    def get_league_teams_raw(self, league_id):
+        """Return the raw JSON when requesting the teams for the current league.
 
         :return: JSON document of the request.
         """
@@ -109,7 +118,7 @@ class YHandler:
             return json.load(f)
 
     def get_player_ownership_raw(self, league_id, player_ids):
-        if player_ids == 27564 :
+        if player_ids == 27564:
             fn = self.dir_path + "/sample.player_ownership_freeagent.json"
             with open(fn, "r") as f:
                 return json.load(f)
@@ -124,7 +133,7 @@ class YHandler:
             return json.load(f)
 
     def get_player_stats_raw(self, game_code, player_ids, req_type, day,
-                             season):
+                             week, season):
         if game_code == 'nhl':
             id = "396.l.21484"
         else:

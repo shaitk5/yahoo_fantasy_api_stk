@@ -16,6 +16,7 @@ class League:
         will be for this league.
     :type league_id: str
     """
+
     def __init__(self, sc, league_id):
         self.sc = sc
         self.league_id = league_id
@@ -47,6 +48,24 @@ class League:
         tm = yfa.Team(self.sc, team_key)
         tm.inject_yhandler(self.yhandler)
         return tm
+
+    def get_team(self, team_name):
+        """Construct a Team object from a League
+
+        :param team_name: Team name of the Team object to construct
+        :type team_name: str
+        :return: A dictionary with the team name as the key and team object as the value
+        :rtype: dict
+        """
+        json = self.yhandler.get_league_teams_raw(self.league_id)
+        t = objectpath.Tree(json)
+        team = {}
+        try:
+            team_key = t.execute("$..teams..team[@[2].name is '{}']..team_key[0]".format(team_name))
+            team[team_name] = self.to_team(team_key)
+        except StopIteration:
+            pass
+        return team
 
     def standings(self):
         """Return the standings of the league id
@@ -396,7 +415,7 @@ class League:
             '$..percent_owned.(coverage_type,value)'))))
         # When iterating over the players we step by 2 to account for the
         # percent_owned data that is stored adjacent to each player.
-        for i, pct_own in zip(range(0, t.execute('$..players.count[0]')*2, 2),
+        for i, pct_own in zip(range(0, t.execute('$..players.count[0]') * 2, 2),
                               pct_owns):
             path = '$..players..player[{}].'.format(i) + \
                 "(name,player_id,position_type,status,eligible_positions)"
@@ -418,7 +437,7 @@ class League:
             # Ignore players that are not active
             if plyr["status"] != "NA":
                 fa.append(plyr)
-        return (i/2 + 1, fa)
+        return (i / 2 + 1, fa)
 
     def _pct_owned_from_page(self, po_it):
         """Extract the ownership % of players taken from a player JSON dump
@@ -443,7 +462,7 @@ class League:
                     po.append(0)
                     i += 1
                 if "value" in ele:
-                    po[i-1] = ele['value']
+                    po[i - 1] = ele['value']
         except StopIteration:
             pass
         return po
@@ -552,7 +571,6 @@ class League:
             pass
         return po
 
-
     def ownership(self, player_ids):
         """Retrieve the owner of a player
 
@@ -621,16 +639,17 @@ class League:
             self.positions_cache = pmap
         return self.positions_cache
 
-    def player_stats(self, player_ids, req_type, date=None, season=None):
+    def player_stats(self, player_ids, req_type, date=None, week=None, season=None):
         """Return stats for a list of players
 
         :param player_ids: Yahoo! player IDs of the players to get stats for
         :type player_ids: list(int)
         :param req_type: Defines the date range for the stats.  Valid values
-            are: 'season', 'average_season', 'lastweek', 'lastmonth', 'date'.
+            are: 'season', 'average_season', 'lastweek', 'lastmonth', 'date', 'week'.
             'season' returns stats for a given season, specified by the season
-            paramter.  'date' returns stats for a single date, specified by
-            the date parameter.
+            parameter.  'date' returns stats for a single date, specified by
+            the date parameter. 'week' returns stats for a single week, specified by
+            the week parameter.
             The 'last*' types return stats for a given time frame relative to
             the current.
         :type req_type: str
@@ -638,6 +657,10 @@ class League:
             what date to request the stats for.  If left as None, and range
             is for a date this returns stats for the current date.
         :type date: datetime.date
+        :param week: NFL ONLY: When requesting stats for a week, this identifies the
+            week.  If None and requesting stats for a season, this will
+            return stats for the current season.
+        :type week: int
         :param season: When requesting stats for a season, this identifies the
             season.  If None and requesting stats for a season, this will
             return stats for the current season.
@@ -675,7 +698,7 @@ class League:
            'GStr': 7.0,
            'Shifts': 684.0}]
         """
-        if type(player_ids) is not list:
+        if not isinstance(player_ids, list):
             player_ids = [player_ids]
 
         lg_settings = self.settings()
@@ -686,7 +709,7 @@ class League:
             next_player_ids = player_ids[0:25]
             player_ids = player_ids[25:]
             stats += self._fetch_plyr_stats(game_code, next_player_ids,
-                                            req_type, date, season)
+                                            req_type, date, week, season)
         return stats
 
     def draft_results(self):
@@ -725,13 +748,16 @@ class League:
         dres = []
         pat = re.compile(r'.*\.p\.([0-9]+)$')
         for p in t.execute('$..draft_results..draft_result'):
-            pk = p['player_key']
-            m = pat.search(pk)
-            if m:
-                pid = int(m.group(1))
-                p['player_id'] = pid
-                del p['player_key']
-            dres.append(p)
+            try:
+                pk = p['player_key']
+                m = pat.search(pk)
+                if m:
+                    pid = int(m.group(1))
+                    p['player_id'] = pid
+                    del p['player_key']
+                dres.append(p)
+            except KeyError:
+                pass
         return(dres)
 
     def transactions(self, tran_types, count):
@@ -750,8 +776,8 @@ class League:
 
         >>> transactions('trade', '1')
         [
-            {'players': {...}, 'status': 'successful', 'timestamp': '1605168906', 'tradee_team_key': '399.l.710921.t.3', 'tradee_team_name': 'Red Skins Matter', 'trader_team_key': '399.l.710921.t.9', 'trader_team_name': 'Too Many Cooks', 'transaction_id': '319', 'transaction_key': '399.l.710921.tr.319', ...}, 
-            {'players': {...}, 'status': 'successful', 'timestamp': '1604650727', 'tradee_team_key': '399.l.710921.t.5', 'tradee_team_name': 'Nuklear JuJu Charks', 'trader_team_key': '399.l.710921.t.2', 'trader_team_name': 'JuJus Golden Johnson', 'transaction_id': '295', 'transaction_key': '399.l.710921.tr.295', ...}, 
+            {'players': {...}, 'status': 'successful', 'timestamp': '1605168906', 'tradee_team_key': '399.l.710921.t.3', 'tradee_team_name': 'Red Skins Matter', 'trader_team_key': '399.l.710921.t.9', 'trader_team_name': 'Too Many Cooks', 'transaction_id': '319', 'transaction_key': '399.l.710921.tr.319', ...},
+            {'players': {...}, 'status': 'successful', 'timestamp': '1604650727', 'tradee_team_key': '399.l.710921.t.5', 'tradee_team_name': 'Nuklear JuJu Charks', 'trader_team_key': '399.l.710921.t.2', 'trader_team_name': 'JuJus Golden Johnson', 'transaction_id': '295', 'transaction_key': '399.l.710921.tr.295', ...},
             {'players': {...}, 'status': 'successful', 'timestamp': '1601773444', 'tradee_team_key': '399.l.710921.t.4', 'tradee_team_name': 'DJ chark juju juju', 'trader_team_key': '399.l.710921.t.9', 'trader_team_name': 'Too Many Cooks', 'transaction_id': '133', 'transaction_key': '399.l.710921.tr.133', ...}
         ]
         '''
@@ -763,7 +789,7 @@ class League:
             transactions.append({**transaction_details, **players})
         return transactions
 
-    def _fetch_plyr_stats(self, game_code, player_ids, req_type, date, season):
+    def _fetch_plyr_stats(self, game_code, player_ids, req_type, date, week, season):
         '''
         Fetch player stats for at most 25 player IDs.
 
@@ -771,13 +797,14 @@ class League:
         :param player_ids: List of up to 25 player IDs
         :param req_type: Request type
         :param date: Date if request type is 'date'
+        :param week: NFL ONLY: Week number if request type is 'week'
         :param season: Season if request type is 'season'
         :return: The stats requested
         :rtype: list(dict)
         '''
         assert(len(player_ids) > 0 and len(player_ids) <= 25)
         json = self.yhandler.get_player_stats_raw(game_code, player_ids,
-                                                  req_type, date, season)
+                                                  req_type, date, week, season)
         t = objectpath.Tree(json)
         stats = []
         row = None
